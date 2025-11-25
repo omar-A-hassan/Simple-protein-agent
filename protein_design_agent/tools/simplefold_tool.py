@@ -20,7 +20,7 @@ SIMPLEFOLD_CONFIG = {
     "num_steps": 50,                   # REDUCED from 500 to 50 to prevent Colab crashes
     "tau": 0.05,                       # Temperature parameter
     "nsample_per_protein": 1,          # Number of structures to generate
-    "plddt": False,                    # Disabled by default: requires downloading huge 1.6B model which fails in Colab
+    "plddt": True,                     # Enabled: Requires running setup_models.py first!
     "simplefold_repo_path": None       # Path to ml-simplefold repo (set via env or auto-detect)
 }
 
