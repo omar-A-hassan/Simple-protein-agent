@@ -47,13 +47,15 @@ def main():
     download_file(MODELS["simplefold_100M"], ARTIFACTS_DIR / "simplefold_100M.ckpt")
     
     # 2. Download pLDDT dependencies (Optional but requested)
-    print("\n📦 Downloading pLDDT (Confidence) Models...")
-    print("NOTE: This includes a large 1.6B model (~6GB). Please be patient.")
+    # NOTE: pLDDT requires the 1.6B model which causes OOM in standard Colab.
+    # We are disabling this by default to save 6GB+ of download.
+    # print("\n📦 Downloading pLDDT (Confidence) Models...")
+    # print("NOTE: This includes a large 1.6B model (~6GB). Please be patient.")
     
-    download_file(MODELS["plddt_module"], ARTIFACTS_DIR / "plddt_module_1.6B.ckpt")
-    download_file(MODELS["simplefold_1.6B"], ARTIFACTS_DIR / "simplefold_1.6B.ckpt")
+    # download_file(MODELS["plddt_module"], ARTIFACTS_DIR / "plddt_module_1.6B.ckpt")
+    # download_file(MODELS["simplefold_1.6B"], ARTIFACTS_DIR / "simplefold_1.6B.ckpt")
     
-    print("\n✅ Setup Complete! You can now run the agent with pLDDT enabled.")
+    print("\n✅ Setup Complete! Base model (100M) is ready.")
 
 if __name__ == "__main__":
     main()
