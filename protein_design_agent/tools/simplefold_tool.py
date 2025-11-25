@@ -90,16 +90,9 @@ def _fold_with_simplefold(sequence: str, job_id: str, output_dir: str) -> Dict[s
                 repo_path = str(p)
                 break
 
-    if repo_path is None:
-        raise RuntimeError(
-            "SimpleFold repository not found. Please set SIMPLEFOLD_REPO_PATH environment variable "
-            "or clone ml-simplefold to the current directory."
-        )
-
-    sys.path.append(str(Path(repo_path) / "src" / "simplefold"))
-
+    # SimpleFold is installed as a package, no need to manipulate sys.path
     try:
-        from src.simplefold.wrapper import ModelWrapper, InferenceWrapper
+        from simplefold.wrapper import ModelWrapper, InferenceWrapper
         import lightning.pytorch as pl
         pl.seed_everything(42, workers=True)
     except ImportError as e:
