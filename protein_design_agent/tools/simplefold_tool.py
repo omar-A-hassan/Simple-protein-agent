@@ -32,15 +32,20 @@ def _apply_embedding_padding_patch():
     global _EMBEDDING_PATCH_APPLIED
 
     if _EMBEDDING_PATCH_APPLIED:
+        logger.info("Patch already applied, skipping")
         return True
+
+    logger.info("Starting embedding patch process...")
 
     try:
         import torch
-    except ImportError:
-        logger.warning("PyTorch not available, cannot apply embedding patch")
+        logger.info("PyTorch import successful")
+    except ImportError as e:
+        logger.error(f"PyTorch not available: {e}")
         return False
 
     # Find ml-simplefold directory
+    logger.info(f"Searching for ml-simplefold from: {Path.cwd()}")
     possible_paths = [
         Path.cwd() / "ml-simplefold",
         Path.cwd().parent / "ml-simplefold",
@@ -49,22 +54,28 @@ def _apply_embedding_padding_patch():
 
     ml_simplefold_path = None
     for p in possible_paths:
+        logger.info(f"Checking path: {p}")
         if p.exists():
             ml_simplefold_path = str(p.absolute())
+            logger.info(f"Found ml-simplefold at: {ml_simplefold_path}")
             break
 
     if not ml_simplefold_path:
-        logger.warning("ml-simplefold not found, cannot apply embedding padding patch")
+        logger.error(f"ml-simplefold not found in any of: {[str(p) for p in possible_paths]}")
         return False
 
     # Add to path if not already there
     if ml_simplefold_path not in sys.path:
         sys.path.insert(0, ml_simplefold_path)
+        logger.info(f"Added {ml_simplefold_path} to sys.path")
 
     try:
+        logger.info("Attempting to import esm_utils...")
         from src.simplefold.utils import esm_utils
+        logger.info("esm_utils imported successfully")
 
         # Store original function
+        logger.info("Storing original compute_language_model_representations function")
         original_compute = esm_utils.compute_language_model_representations
 
         def pad_embeddings_to_37(embeddings, original_layers):
@@ -202,7 +213,12 @@ def _fold_with_simplefold(sequence: str, job_id: str, output_dir: str) -> Dict[s
         sys.path.insert(0, inner_path)
 
     # Apply embedding padding patch BEFORE importing SimpleFold modules
-    _apply_embedding_padding_patch()
+    logger.info("Attempting to apply embedding padding patch...")
+    patch_success = _apply_embedding_padding_patch()
+    if not patch_success:
+        logger.error("Embedding padding patch FAILED - dimension errors likely")
+    else:
+        logger.info("Embedding padding patch verification: SUCCESS")
 
     try:
         # Import exactly as shown in SimpleFold's sample.ipynb
