@@ -24,6 +24,98 @@ SIMPLEFOLD_CONFIG = {
     "simplefold_repo_path": None       # Path to ml-simplefold repo (set via env or auto-detect)
 }
 
+# Monkey patch flag to ensure we only apply once
+_EMBEDDING_PATCH_APPLIED = False
+
+def _apply_embedding_padding_patch():
+    """Apply monkey patch to pad ESM2 embeddings from 13 to 37 layers."""
+    global _EMBEDDING_PATCH_APPLIED
+
+    if _EMBEDDING_PATCH_APPLIED:
+        return True
+
+    try:
+        import torch
+    except ImportError:
+        logger.warning("PyTorch not available, cannot apply embedding patch")
+        return False
+
+    # Find ml-simplefold directory
+    possible_paths = [
+        Path.cwd() / "ml-simplefold",
+        Path.cwd().parent / "ml-simplefold",
+        Path.cwd() / ".." / "ml-simplefold"
+    ]
+
+    ml_simplefold_path = None
+    for p in possible_paths:
+        if p.exists():
+            ml_simplefold_path = str(p.absolute())
+            break
+
+    if not ml_simplefold_path:
+        logger.warning("ml-simplefold not found, cannot apply embedding padding patch")
+        return False
+
+    # Add to path if not already there
+    if ml_simplefold_path not in sys.path:
+        sys.path.insert(0, ml_simplefold_path)
+
+    try:
+        from src.simplefold.utils import esm_utils
+
+        # Store original function
+        original_compute = esm_utils.compute_language_model_representations
+
+        def pad_embeddings_to_37(embeddings, original_layers):
+            """Interpolate embeddings from original_layers to 37 layers."""
+            if original_layers == 37:
+                return embeddings
+
+            batch, seq_len, layers, embed_dim = embeddings.shape
+            target_layers = 37
+
+            src_indices = torch.linspace(0, layers - 1, target_layers)
+            padded = torch.zeros(batch, seq_len, target_layers, embed_dim,
+                               dtype=embeddings.dtype, device=embeddings.device)
+
+            for i in range(target_layers):
+                idx = src_indices[i]
+                low_idx = int(torch.floor(idx))
+                high_idx = min(int(torch.ceil(idx)), layers - 1)
+                weight = idx - low_idx
+
+                if low_idx == high_idx:
+                    padded[:, :, i, :] = embeddings[:, :, low_idx, :]
+                else:
+                    padded[:, :, i, :] = (1 - weight) * embeddings[:, :, low_idx, :] + \
+                                          weight * embeddings[:, :, high_idx, :]
+
+            logger.info(f"Padded embeddings: {layers} layers to {target_layers} layers (interpolated)")
+            return padded
+
+        def patched_compute(*args, **kwargs):
+            """Wrapper that pads embeddings to 37 layers."""
+            result = original_compute(*args, **kwargs)
+
+            if result.shape[2] != 37:
+                original_layers = result.shape[2]
+                logger.warning(f"ESM2 has {original_layers} layers, SimpleFold expects 37")
+                logger.info("Applying interpolation padding for compatibility")
+                result = pad_embeddings_to_37(result, original_layers)
+
+            return result
+
+        # Apply patch
+        esm_utils.compute_language_model_representations = patched_compute
+        _EMBEDDING_PATCH_APPLIED = True
+        logger.info("Embedding padding patch applied successfully")
+        return True
+
+    except Exception as e:
+        logger.error(f"Failed to apply embedding patch: {e}")
+        return False
+
 def fold_sequence(sequence: str) -> Dict[str, Any]:
     """
     Predicts the 3D structure of a protein sequence using Apple's SimpleFold.
@@ -108,7 +200,10 @@ def _fold_with_simplefold(sequence: str, job_id: str, output_dir: str) -> Dict[s
     inner_path = str(Path(repo_path) / "src" / "simplefold")
     if inner_path not in sys.path:
         sys.path.insert(0, inner_path)
-    
+
+    # Apply embedding padding patch BEFORE importing SimpleFold modules
+    _apply_embedding_padding_patch()
+
     try:
         # Import exactly as shown in SimpleFold's sample.ipynb
         from src.simplefold.wrapper import ModelWrapper, InferenceWrapper
