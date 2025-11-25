@@ -17,7 +17,7 @@ SIMPLEFOLD_CONFIG = {
     "model_size": "simplefold_100M",  # Options: 100M, 360M, 700M, 1.1B, 1.6B, 3B
     "ckpt_dir": "artifacts",           # Where SimpleFold model checkpoints are stored
     "backend": "mlx",                  # "mlx" for Apple Silicon, "torch" for others
-    "num_steps": 500,                  # Inference steps
+    "num_steps": 50,                   # REDUCED from 500 to 50 to prevent Colab crashes
     "tau": 0.05,                       # Temperature parameter
     "nsample_per_protein": 1,          # Number of structures to generate
     "plddt": True,                     # Include confidence scores
