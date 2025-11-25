@@ -90,20 +90,20 @@ def _fold_with_simplefold(sequence: str, job_id: str, output_dir: str) -> Dict[s
                 repo_path = str(p)
                 break
 
-    # SimpleFold uses src layout - add src directory to path
+    # SimpleFold uses src layout - add repo root to path (like their sample.ipynb)
     if repo_path is None:
         raise RuntimeError(
             "SimpleFold repository not found. Please set SIMPLEFOLD_REPO_PATH environment variable "
             "or clone ml-simplefold to the current directory."
         )
     
-    # Add the src directory to Python path for src layout
-    src_path = str(Path(repo_path) / "src")
-    if src_path not in sys.path:
-        sys.path.insert(0, src_path)
+    # Add repo root to path, then import from src.simplefold (as per official sample.ipynb)
+    if str(repo_path) not in sys.path:
+        sys.path.insert(0, str(repo_path))
     
     try:
-        from simplefold.wrapper import ModelWrapper, InferenceWrapper
+        # Import exactly as shown in SimpleFold's sample.ipynb
+        from src.simplefold.wrapper import ModelWrapper, InferenceWrapper
         import lightning.pytorch as pl
         pl.seed_everything(42, workers=True)
     except ImportError as e:
