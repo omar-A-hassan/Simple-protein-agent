@@ -1,0 +1,14 @@
+# Core Google ADK dependencies
+google-genai>=0.8.0
+google-adk>=0.1.0
+
+# Optional: for local testing with Web UI
+streamlit>=1.0.0
+
+# Gemini model dependencies
+google-generativeai
+
+# Utilities
+python-dotenv
+
+mlx==0.28.0
