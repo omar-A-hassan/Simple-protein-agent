@@ -119,47 +119,66 @@ def _fold_with_simplefold(sequence: str, job_id: str, output_dir: str) -> Dict[s
             f"Failed to import SimpleFold modules. Ensure ml-simplefold is installed: {e}"
         )
 
-    # Initialize ModelWrapper
-    logger.info(f"Loading SimpleFold model: {SIMPLEFOLD_CONFIG['model_size']}")
-    model_wrapper = ModelWrapper(
-        simplefold_model=SIMPLEFOLD_CONFIG["model_size"],
-        ckpt_dir=SIMPLEFOLD_CONFIG["ckpt_dir"],
-        plddt=SIMPLEFOLD_CONFIG["plddt"],
-        backend=SIMPLEFOLD_CONFIG["backend"]
-    )
+    # SimpleFold uses relative paths for configs, so we MUST run from the repo directory
+    original_cwd = os.getcwd()
+    os.chdir(repo_path)
+    logger.info(f"Changed working directory to {repo_path} for SimpleFold execution")
 
-    device = model_wrapper.device
-    folding_model = model_wrapper.from_pretrained_folding_model()
-    plddt_model = model_wrapper.from_pretrained_plddt_model() if SIMPLEFOLD_CONFIG["plddt"] else None
+    try:
+        # Initialize ModelWrapper
+        logger.info(f"Loading SimpleFold model: {SIMPLEFOLD_CONFIG['model_size']}")
+        model_wrapper = ModelWrapper(
+            simplefold_model=SIMPLEFOLD_CONFIG["model_size"],
+            ckpt_dir=SIMPLEFOLD_CONFIG["ckpt_dir"],
+            plddt=SIMPLEFOLD_CONFIG["plddt"],
+            backend=SIMPLEFOLD_CONFIG["backend"]
+        )
 
-    # Initialize InferenceWrapper
-    prediction_dir = os.path.join(output_dir, "simplefold_predictions")
-    inference_wrapper = InferenceWrapper(
-        output_dir=SIMPLEFOLD_CONFIG["ckpt_dir"],
-        prediction_dir=prediction_dir,
-        num_steps=SIMPLEFOLD_CONFIG["num_steps"],
-        tau=SIMPLEFOLD_CONFIG["tau"],
-        nsample_per_protein=SIMPLEFOLD_CONFIG["nsample_per_protein"],
-        device=device,
-        backend=SIMPLEFOLD_CONFIG["backend"]
-    )
+        device = model_wrapper.device
+        folding_model = model_wrapper.from_pretrained_folding_model()
+        plddt_model = model_wrapper.from_pretrained_plddt_model() if SIMPLEFOLD_CONFIG["plddt"] else None
 
-    # Process input and run inference
-    logger.info("Processing sequence and running inference...")
-    batch, structure, record = inference_wrapper.process_input(sequence)
-    results = inference_wrapper.run_inference(batch, folding_model, plddt_model, device=device)
+        # Initialize InferenceWrapper
+        # Note: output_dir is relative to the NEW cwd (repo_path)
+        # We want the output to be in the original output_dir, so we need absolute path
+        abs_output_dir = os.path.abspath(os.path.join(original_cwd, output_dir))
+        prediction_dir = os.path.join(abs_output_dir, "simplefold_predictions")
+        
+        inference_wrapper = InferenceWrapper(
+            output_dir=SIMPLEFOLD_CONFIG["ckpt_dir"],
+            prediction_dir=prediction_dir,
+            num_steps=SIMPLEFOLD_CONFIG["num_steps"],
+            tau=SIMPLEFOLD_CONFIG["tau"],
+            nsample_per_protein=SIMPLEFOLD_CONFIG["nsample_per_protein"],
+            device=device,
+            backend=SIMPLEFOLD_CONFIG["backend"]
+        )
 
-    # Save results (returns list of paths)
-    save_paths = inference_wrapper.save_result(structure, record, results, out_name=job_id)
-    output_pdb_path = save_paths[0] if save_paths else None
+        # Process input and run inference
+        logger.info("Processing sequence and running inference...")
+        batch, structure, record = inference_wrapper.process_input(sequence)
+        results = inference_wrapper.run_inference(batch, folding_model, plddt_model, device=device)
 
-    if output_pdb_path is None:
-        raise RuntimeError("SimpleFold did not generate output file")
+        # Save results (returns list of paths)
+        save_paths = inference_wrapper.save_result(structure, record, results, out_name=job_id)
+        output_pdb_path = save_paths[0] if save_paths else None
 
-    logger.info(f"SimpleFold prediction saved to {output_pdb_path}")
+        if output_pdb_path is None:
+            raise RuntimeError("SimpleFold did not generate output file")
 
-    return {
-        "status": "success",
+        logger.info(f"SimpleFold prediction saved to {output_pdb_path}")
+        
+        # Return absolute path
+        return {
+            "status": "success",
+            "pdb_file": str(Path(output_pdb_path).absolute()),
+            "job_id": job_id
+        }
+
+    finally:
+        # Always restore original CWD
+        os.chdir(original_cwd)
+        logger.info(f"Restored working directory to {original_cwd}")
         "pdb_file_path": os.path.abspath(output_pdb_path),
         "message": f"Successfully folded sequence of length {len(sequence)} using SimpleFold.",
         "job_id": job_id,
