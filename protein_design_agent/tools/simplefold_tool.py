@@ -179,12 +179,6 @@ def _fold_with_simplefold(sequence: str, job_id: str, output_dir: str) -> Dict[s
         # Always restore original CWD
         os.chdir(original_cwd)
         logger.info(f"Restored working directory to {original_cwd}")
-        "pdb_file_path": os.path.abspath(output_pdb_path),
-        "message": f"Successfully folded sequence of length {len(sequence)} using SimpleFold.",
-        "job_id": job_id,
-        "model_used": SIMPLEFOLD_CONFIG["model_size"],
-        "confidence_included": SIMPLEFOLD_CONFIG["plddt"]
-    }
 
 
 def _fold_mock(sequence: str, job_id: str, output_dir: str) -> Dict[str, Any]:
