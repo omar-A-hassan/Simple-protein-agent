@@ -90,7 +90,18 @@ def _fold_with_simplefold(sequence: str, job_id: str, output_dir: str) -> Dict[s
                 repo_path = str(p)
                 break
 
-    # SimpleFold is installed as a package, no need to manipulate sys.path
+    # SimpleFold uses src layout - add src directory to path
+    if repo_path is None:
+        raise RuntimeError(
+            "SimpleFold repository not found. Please set SIMPLEFOLD_REPO_PATH environment variable "
+            "or clone ml-simplefold to the current directory."
+        )
+    
+    # Add the src directory to Python path for src layout
+    src_path = str(Path(repo_path) / "src")
+    if src_path not in sys.path:
+        sys.path.insert(0, src_path)
+    
     try:
         from simplefold.wrapper import ModelWrapper, InferenceWrapper
         import lightning.pytorch as pl
