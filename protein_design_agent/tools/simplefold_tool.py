@@ -135,8 +135,58 @@ def _fold_with_simplefold(sequence: str, job_id: str, output_dir: str) -> Dict[s
         )
 
         device = model_wrapper.device
-        folding_model = model_wrapper.from_pretrained_folding_model()
-        plddt_model = model_wrapper.from_pretrained_plddt_model() if SIMPLEFOLD_CONFIG["plddt"] else None
+        
+        # Helper to load model with auto-recovery for corrupted checkpoints
+        def load_model_safe(load_func, model_name_for_path):
+            try:
+                return load_func()
+            except RuntimeError as e:
+                # Check for zip corruption error (common if download was interrupted)
+                if "failed finding central directory" in str(e) or "PytorchStreamReader" in str(e):
+                    logger.warning(f"Detected corrupted checkpoint for {model_name_for_path}. Deleting and retrying...")
+                    
+                    # Construct path to checkpoint (relative to current CWD which is repo_path)
+                    # Note: SimpleFold names files as {model_name}.ckpt
+                    ckpt_filename = f"{model_name_for_path}.ckpt"
+                    ckpt_path = os.path.join(SIMPLEFOLD_CONFIG["ckpt_dir"], ckpt_filename)
+                    
+                    if os.path.exists(ckpt_path):
+                        os.remove(ckpt_path)
+                        logger.info(f"Deleted corrupted checkpoint: {ckpt_path}")
+                    else:
+                        logger.warning(f"Could not find checkpoint file at {ckpt_path} to delete.")
+                    
+                    # Retry loading (SimpleFold wrapper will re-download)
+                    logger.info("Retrying model load (this will trigger re-download)...")
+                    return load_func()
+                else:
+                    raise e
+
+        # Load folding model
+        folding_model = load_model_safe(
+            model_wrapper.from_pretrained_folding_model, 
+            SIMPLEFOLD_CONFIG["model_size"]
+        )
+        
+        # Load pLDDT model if requested
+        plddt_model = None
+        if SIMPLEFOLD_CONFIG["plddt"]:
+            # pLDDT model has a specific name in SimpleFold wrapper, usually plddt_module_1.6B.ckpt
+            # But the wrapper handles the name internally. We just need to catch the error.
+            # For the file path, we might guess, but let's just try/except the call.
+            # The wrapper uses a fixed URL/name for pLDDT: plddt_module_1.6B.ckpt
+            
+            try:
+                plddt_model = model_wrapper.from_pretrained_plddt_model()
+            except RuntimeError as e:
+                 if "failed finding central directory" in str(e) or "PytorchStreamReader" in str(e):
+                    logger.warning("Detected corrupted pLDDT checkpoint. Deleting and retrying...")
+                    ckpt_path = os.path.join(SIMPLEFOLD_CONFIG["ckpt_dir"], "plddt_module_1.6B.ckpt")
+                    if os.path.exists(ckpt_path):
+                        os.remove(ckpt_path)
+                    plddt_model = model_wrapper.from_pretrained_plddt_model()
+                 else:
+                    raise e
 
         # Initialize InferenceWrapper
         # Note: output_dir is relative to the NEW cwd (repo_path)
