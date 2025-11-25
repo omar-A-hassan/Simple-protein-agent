@@ -90,16 +90,24 @@ def _fold_with_simplefold(sequence: str, job_id: str, output_dir: str) -> Dict[s
                 repo_path = str(p)
                 break
 
-    # SimpleFold uses src layout - add repo root to path (like their sample.ipynb)
+    # SimpleFold requires BOTH paths:
+    # 1. repo_root: to import 'src.simplefold.wrapper'
+    # 2. src/simplefold: to allow internal imports like 'from model.flow import...'
+    
     if repo_path is None:
         raise RuntimeError(
             "SimpleFold repository not found. Please set SIMPLEFOLD_REPO_PATH environment variable "
             "or clone ml-simplefold to the current directory."
         )
     
-    # Add repo root to path, then import from src.simplefold (as per official sample.ipynb)
+    # Add repo root
     if str(repo_path) not in sys.path:
         sys.path.insert(0, str(repo_path))
+
+    # Add src/simplefold for internal module resolution
+    inner_path = str(Path(repo_path) / "src" / "simplefold")
+    if inner_path not in sys.path:
+        sys.path.insert(0, inner_path)
     
     try:
         # Import exactly as shown in SimpleFold's sample.ipynb
