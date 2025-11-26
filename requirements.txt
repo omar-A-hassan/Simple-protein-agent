@@ -12,3 +12,5 @@ google-generativeai
 python-dotenv
 
 mlx==0.28.0
+fair-esm
+
