@@ -166,13 +166,12 @@ def _apply_sequential_patch():
             Ignores the passed model (which might be None or dummy).
             """
             global _PRECOMPUTED_EMBEDDINGS
-            global _PRECOMPUTED_EMBEDDINGS
             logger.warning("DEBUG: Accessed patched compute_language_model_representations")
-            
+            logger.warning(f"DEBUG: batch_tokens shape: {batch_tokens.shape if hasattr(batch_tokens, 'shape') else 'N/A'}")
+
             if _PRECOMPUTED_EMBEDDINGS is not None:
-                logger.info("Returning pre-computed embeddings")
-                # Ensure it's on the correct device if needed, but SimpleFold handles device movement
-                # We return it as is (CPU tensor), SimpleFold will move it
+                logger.warning(f"DEBUG: Returning pre-computed embeddings with shape: {_PRECOMPUTED_EMBEDDINGS.shape}")
+                logger.warning(f"DEBUG: Embeddings dtype: {_PRECOMPUTED_EMBEDDINGS.dtype}, device: {_PRECOMPUTED_EMBEDDINGS.device}")
                 return _PRECOMPUTED_EMBEDDINGS
             else:
                 logger.error("No pre-computed embeddings found!")
@@ -388,9 +387,23 @@ def _fold_with_simplefold(sequence: str, job_id: str, output_dir: str) -> Dict[s
         logger.warning(f"DEBUG: process_input done. Batch type: {type(batch)}")
         
         results = inference_wrapper.run_inference(batch, folding_model, plddt_model, device=device)
-        logger.warning(f"DEBUG: run_inference done. Results: {results}")
+        logger.warning(f"DEBUG: run_inference done. Results type: {type(results)}")
+
+        # Check what's actually in results before accessing it
+        if results is None:
+            logger.error("CRITICAL: run_inference returned None!")
+            raise RuntimeError("run_inference returned None - check SimpleFold implementation")
+        else:
+            logger.warning(f"DEBUG: Results is not None. Type: {type(results)}")
+            if hasattr(results, 'keys'):
+                logger.warning(f"DEBUG: Results keys: {list(results.keys())}")
+            elif isinstance(results, (list, tuple)):
+                logger.warning(f"DEBUG: Results is a {type(results)} with length {len(results)}")
+            else:
+                logger.warning(f"DEBUG: Results is {type(results)}: {results}")
 
         # Save results (returns list of paths)
+        logger.warning("DEBUG: About to call save_result...")
         save_paths = inference_wrapper.save_result(structure, record, results, out_name=job_id)
         logger.warning(f"DEBUG: save_result done. save_paths: {save_paths}")
         
