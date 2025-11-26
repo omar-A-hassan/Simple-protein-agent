@@ -385,9 +385,18 @@ def _fold_with_simplefold(sequence: str, job_id: str, output_dir: str) -> Dict[s
         logger.warning("DEBUG: Processing sequence and running inference...")
         batch, structure, record = inference_wrapper.process_input(sequence)
         logger.warning(f"DEBUG: process_input done. Batch type: {type(batch)}")
-        
-        results = inference_wrapper.run_inference(batch, folding_model, plddt_model, device=device)
-        logger.warning(f"DEBUG: run_inference done. Results type: {type(results)}")
+
+        logger.warning("DEBUG: About to call run_inference...")
+        try:
+            results = inference_wrapper.run_inference(batch, folding_model, plddt_model, device=device)
+            logger.warning(f"DEBUG: run_inference completed successfully. Results type: {type(results)}")
+        except Exception as e:
+            logger.error(f"CRITICAL: run_inference raised an exception!")
+            logger.error(f"Exception type: {type(e).__name__}")
+            logger.error(f"Exception message: {str(e)}")
+            import traceback
+            logger.error(f"Full traceback:\n{traceback.format_exc()}")
+            raise
 
         # Check what's actually in results before accessing it
         if results is None:
