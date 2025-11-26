@@ -24,107 +24,104 @@ SIMPLEFOLD_CONFIG = {
     "simplefold_repo_path": None       # Path to ml-simplefold repo (set via env or auto-detect)
 }
 
-# Monkey patch flag to ensure we only apply once
-_EMBEDDING_PATCH_APPLIED = False
+# Global storage for pre-computed embeddings
+_PRECOMPUTED_EMBEDDINGS = None
 
-def _apply_embedding_padding_patch():
-    """Apply monkey patch to pad ESM2 embeddings from 13 to 37 layers."""
-    global _EMBEDDING_PATCH_APPLIED
-
-    if _EMBEDDING_PATCH_APPLIED:
-        logger.info("Patch already applied, skipping")
-        return True
-
-    logger.info("Starting embedding patch process...")
-
+def _generate_embeddings_sequentially(sequence: str):
+    """
+    Generates ESM-3B embeddings sequentially:
+    1. Load ESM-3B model
+    2. Compute embeddings
+    3. Unload model and clear memory
+    """
+    global _PRECOMPUTED_EMBEDDINGS
+    logger.info("Starting sequential embedding generation...")
+    
     try:
         import torch
-        logger.info("PyTorch import successful")
-    except ImportError as e:
-        logger.error(f"PyTorch not available: {e}")
-        return False
+        import esm
+        
+        # Load ESM-3B model
+        logger.info("Loading ESM-3B model (esm2_t36_3B_UR50D)...")
+        model, alphabet = esm.pretrained.esm2_t36_3B_UR50D()
+        batch_converter = alphabet.get_batch_converter()
+        model.eval()
+        
+        if torch.cuda.is_available():
+            model = model.cuda()
+            logger.info("ESM-3B loaded on GPU")
+        else:
+            logger.info("ESM-3B loaded on CPU")
 
-    # Find ml-simplefold directory
-    logger.info(f"Searching for ml-simplefold from: {Path.cwd()}")
-    possible_paths = [
-        Path.cwd() / "ml-simplefold",
-        Path.cwd().parent / "ml-simplefold",
-        Path.cwd() / ".." / "ml-simplefold"
-    ]
+        # Prepare input
+        data = [("protein", sequence)]
+        batch_labels, batch_strs, batch_tokens = batch_converter(data)
+        batch_len = batch_tokens.shape[1]
+        
+        if torch.cuda.is_available():
+            batch_tokens = batch_tokens.cuda()
 
-    ml_simplefold_path = None
-    for p in possible_paths:
-        logger.info(f"Checking path: {p}")
-        if p.exists():
-            ml_simplefold_path = str(p.absolute())
-            logger.info(f"Found ml-simplefold at: {ml_simplefold_path}")
-            break
-
-    if not ml_simplefold_path:
-        logger.error(f"ml-simplefold not found in any of: {[str(p) for p in possible_paths]}")
-        return False
-
-    # Add to path if not already there
-    if ml_simplefold_path not in sys.path:
-        sys.path.insert(0, ml_simplefold_path)
-        logger.info(f"Added {ml_simplefold_path} to sys.path")
-
-    try:
-        logger.info("Attempting to import esm_utils...")
-        from src.simplefold.utils import esm_utils
-        logger.info("esm_utils imported successfully")
-
-        # Store original function
-        logger.info("Storing original compute_language_model_representations function")
-        original_compute = esm_utils.compute_language_model_representations
-
-        def pad_embeddings_to_37(embeddings, original_layers):
-            """Interpolate embeddings from original_layers to 37 layers."""
-            if original_layers == 37:
-                return embeddings
-
-            batch, seq_len, layers, embed_dim = embeddings.shape
-            target_layers = 37
-
-            src_indices = torch.linspace(0, layers - 1, target_layers)
-            padded = torch.zeros(batch, seq_len, target_layers, embed_dim,
-                               dtype=embeddings.dtype, device=embeddings.device)
-
-            for i in range(target_layers):
-                idx = src_indices[i]
-                low_idx = int(torch.floor(idx))
-                high_idx = min(int(torch.ceil(idx)), layers - 1)
-                weight = idx - low_idx
-
-                if low_idx == high_idx:
-                    padded[:, :, i, :] = embeddings[:, :, low_idx, :]
-                else:
-                    padded[:, :, i, :] = (1 - weight) * embeddings[:, :, low_idx, :] + \
-                                          weight * embeddings[:, :, high_idx, :]
-
-            logger.info(f"Padded embeddings: {layers} layers to {target_layers} layers (interpolated)")
-            return padded
-
-        def patched_compute(*args, **kwargs):
-            """Wrapper that pads embeddings to 37 layers."""
-            result = original_compute(*args, **kwargs)
-
-            if result.shape[2] != 37:
-                original_layers = result.shape[2]
-                logger.warning(f"ESM2 has {original_layers} layers, SimpleFold expects 37")
-                logger.info("Applying interpolation padding for compatibility")
-                result = pad_embeddings_to_37(result, original_layers)
-
-            return result
-
-        # Apply patch
-        esm_utils.compute_language_model_representations = patched_compute
-        _EMBEDDING_PATCH_APPLIED = True
-        logger.info("Embedding padding patch applied successfully")
+        # Generate embeddings
+        logger.info("Computing embeddings...")
+        with torch.no_grad():
+            results = model(batch_tokens, repr_layers=[36], return_contacts=True)
+        
+        token_representations = results["representations"][36]
+        
+        # Move to CPU and store
+        _PRECOMPUTED_EMBEDDINGS = token_representations.cpu()
+        logger.info(f"Embeddings computed. Shape: {_PRECOMPUTED_EMBEDDINGS.shape}")
+        
+        # CLEANUP
+        del results
+        del token_representations
+        del model
+        del alphabet
+        del batch_converter
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        logger.info("ESM-3B unloaded and memory cleared.")
+        
         return True
 
     except Exception as e:
-        logger.error(f"Failed to apply embedding patch: {e}")
+        logger.error(f"Failed to generate embeddings sequentially: {e}")
+        return False
+
+def _apply_sequential_patch():
+    """
+    Monkey-patches esm_utils to use pre-computed embeddings.
+    """
+    try:
+        from src.simplefold.utils import esm_utils
+        
+        # Store original if needed (though we mostly bypass it)
+        if not hasattr(esm_utils, "_original_compute"):
+            esm_utils._original_compute = esm_utils.compute_language_model_representations
+
+        def patched_compute(model, alphabet, batch_tokens):
+            """
+            Replacement function that returns pre-computed embeddings.
+            Ignores the passed model (which might be None or dummy).
+            """
+            global _PRECOMPUTED_EMBEDDINGS
+            logger.info("Accessed patched compute_language_model_representations")
+            
+            if _PRECOMPUTED_EMBEDDINGS is not None:
+                logger.info("Returning pre-computed embeddings")
+                # Ensure it's on the correct device if needed, but SimpleFold handles device movement
+                # We return it as is (CPU tensor), SimpleFold will move it
+                return _PRECOMPUTED_EMBEDDINGS
+            else:
+                logger.error("No pre-computed embeddings found!")
+                raise RuntimeError("Sequential loading failed: Embeddings not found.")
+
+        esm_utils.compute_language_model_representations = patched_compute
+        logger.info("Sequential patch applied to esm_utils")
+        return True
+        
+    except ImportError:
+        logger.error("Could not import esm_utils to patch")
         return False
 
 def fold_sequence(sequence: str) -> Dict[str, Any]:
@@ -212,13 +209,21 @@ def _fold_with_simplefold(sequence: str, job_id: str, output_dir: str) -> Dict[s
     if inner_path not in sys.path:
         sys.path.insert(0, inner_path)
 
-    # Apply embedding padding patch BEFORE importing SimpleFold modules
-    logger.info("Attempting to apply embedding padding patch...")
-    patch_success = _apply_embedding_padding_patch()
+    # Apply SEQUENTIAL patch
+    logger.info("Applying sequential loading patch...")
+    patch_success = _apply_sequential_patch()
     if not patch_success:
-        logger.error("Embedding padding patch FAILED - dimension errors likely")
+        logger.error("Sequential patch FAILED")
     else:
-        logger.info("Embedding padding patch verification: SUCCESS")
+        logger.info("Sequential patch applied.")
+
+    # 1. Generate Embeddings Sequentially
+    logger.info("STEP 1: Generating embeddings with ESM-3B...")
+    if not _generate_embeddings_sequentially(sequence):
+        raise RuntimeError("Failed to generate embeddings.")
+    
+    # 2. Proceed with SimpleFold (which will use the patched function)
+
 
     try:
         # Import exactly as shown in SimpleFold's sample.ipynb

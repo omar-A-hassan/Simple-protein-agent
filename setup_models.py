@@ -8,7 +8,9 @@ ARTIFACTS_DIR = Path("artifacts")
 MODELS = {
     "simplefold_100M": "https://ml-site.cdn-apple.com/models/simplefold/simplefold_100M.ckpt",
     "plddt_module": "https://ml-site.cdn-apple.com/models/simplefold/plddt_module_1.6B.ckpt",
-    "simplefold_1.6B": "https://ml-site.cdn-apple.com/models/simplefold/simplefold_1.6B.ckpt"
+    "simplefold_1.6B": "https://ml-site.cdn-apple.com/models/simplefold/simplefold_1.6B.ckpt",
+    "esm_3b": "https://dl.fbaipublicfiles.com/fair-esm/models/esm2_t36_3B_UR50D.pt",
+    "esm_3b_regression": "https://dl.fbaipublicfiles.com/fair-esm/regression/esm2_t36_3B_UR50D-contact-regression.pt"
 }
 
 def download_file(url, dest_path):
@@ -56,6 +58,17 @@ def main():
     # download_file(MODELS["simplefold_1.6B"], ARTIFACTS_DIR / "simplefold_1.6B.ckpt")
     
     print("\n✅ Setup Complete! Base model (100M) is ready.")
+    
+    # 3. Download ESM-3B Model (Required for SimpleFold)
+    print("\n📦 Downloading ESM-3B Model (Required)...")
+    # We download to the torch hub cache directory to match where the tool looks for it
+    torch_hub_dir = Path.home() / ".cache/torch/hub/checkpoints"
+    torch_hub_dir.mkdir(parents=True, exist_ok=True)
+    
+    download_file(MODELS["esm_3b"], torch_hub_dir / "esm2_t36_3B_UR50D.pt")
+    download_file(MODELS["esm_3b_regression"], torch_hub_dir / "esm2_t36_3B_UR50D-contact-regression.pt")
+    
+    print("\n✅ ESM-3B Model Downloaded.")
 
 if __name__ == "__main__":
     main()
