@@ -177,11 +177,31 @@ def fold_sequence(sequence: str) -> Dict[str, Any]:
     """
     Predicts the 3D structure of a protein sequence using Apple's SimpleFold.
 
+    Uses a memory-efficient two-stage approach:
+    1. Loads ESM-3B, computes sequence embeddings, then unloads the model
+    2. Runs SimpleFold structure prediction using the pre-computed embeddings
+
     Args:
-        sequence: The amino acid sequence of the protein (e.g., "MVLSPADKT...").
+        sequence: Amino acid sequence using standard one-letter codes (e.g., "MKTAYIAKQR").
+                  Valid characters: A, C, D, E, F, G, H, I, K, L, M, N, P, Q, R, S, T, V, W, Y
 
     Returns:
-        A dictionary containing the path to the generated PDB file and status.
+        dict: A dictionary with the following keys on success:
+            - "status" (str): "success"
+            - "pdb_file" (str): Absolute path to the generated structure file (CIF format)
+            - "job_id" (str): Unique identifier for this prediction
+
+        On error:
+            - "status" (str): "error"
+            - "error_message" (str): Description of what went wrong
+
+    Example:
+        >>> result = fold_sequence("MKTAYIAKQRQISFVKSHFSRQLEERLGLIEVQAPILSRVGDGTQDNLSGAEKAVQVKVKALPDAQFEVVHSLAKWKRQTLGQHDFSAGEGLYTHMKALRPDEDRLSPLHSVYVDQWDWERVMGDGERQFSTLKSTVEAIWAGIKATEAAVSEEFGLAPFLPDQIHFVHSQELLSRYPDLDAKGRERAIAKDLGAVFLVGIGGKLSDGHRHDVRAPDYDDWSTPSELGHAGLNGDILVWNPVLEDAFELSSMGIRVDADTLKHQLALTGDEDRLELEWHQALLRGEMPQTIGGGIGQSRLTMLLLQLPHIGQVQAGVWPAAVRESVPSLL")
+        {
+            "status": "success",
+            "pdb_file": "/path/to/output_pdbs/simplefold_predictions/job_id_sampled_0.cif",
+            "job_id": "a04e033e-8e61-477a-9e2a-44ca70bb8735"
+        }
     """
     logger.info(f"Received request to fold sequence: {sequence[:10]}... (Length: {len(sequence)})")
 
