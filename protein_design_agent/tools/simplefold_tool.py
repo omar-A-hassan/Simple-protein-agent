@@ -56,6 +56,8 @@ def _generate_embeddings_sequentially(sequence: str):
             "esmfold_structure_module_only_650M_270K",
             "esmfold_structure_module_only_3B",
             "esmfold_structure_module_only_3B_270K",
+            "esmfold_structure_module_only_15B",
+            "esmfold_structure_module_only_15B_270K",
         ]
         
         for model_name in missing_models:
@@ -136,6 +138,8 @@ def _apply_sequential_patch():
             "esmfold_structure_module_only_650M_270K",
             "esmfold_structure_module_only_3B",
             "esmfold_structure_module_only_3B_270K",
+            "esmfold_structure_module_only_15B",
+            "esmfold_structure_module_only_15B_270K",
         ]
         
         for model_name in missing_models:
