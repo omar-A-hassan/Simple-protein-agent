@@ -39,8 +39,18 @@ def _generate_embeddings_sequentially(sequence: str):
     
     try:
         import torch
+        import torch
         import esm
-        
+        import esm.pretrained
+
+        # PATCH: Fix for "cannot import name 'esmfold_structure_module_only_8M'"
+        # This function is missing in some versions of fair-esm but required by ml-simplefold (or its dependencies)
+        if not hasattr(esm.pretrained, "esmfold_structure_module_only_8M"):
+            logger.warning("Patching missing esmfold_structure_module_only_8M in esm.pretrained")
+            def _dummy_esmfold_structure_module_only_8M():
+                raise NotImplementedError("This is a dummy function patched by Protein Agent.")
+            esm.pretrained.esmfold_structure_module_only_8M = _dummy_esmfold_structure_module_only_8M
+
         # Load ESM-3B model
         logger.info("Loading ESM-3B model (esm2_t36_3B_UR50D)...")
         model, alphabet = esm.pretrained.esm2_t36_3B_UR50D()
@@ -93,6 +103,16 @@ def _apply_sequential_patch():
     Monkey-patches esm_utils to use pre-computed embeddings.
     """
     try:
+    try:
+        # PATCH: Fix for "cannot import name 'esmfold_structure_module_only_8M'"
+        # We must apply this BEFORE importing esm_utils, as it might import esm.pretrained
+        import esm.pretrained
+        if not hasattr(esm.pretrained, "esmfold_structure_module_only_8M"):
+            logger.warning("Patching missing esmfold_structure_module_only_8M in esm.pretrained (Global Patch)")
+            def _dummy_esmfold_structure_module_only_8M():
+                raise NotImplementedError("This is a dummy function patched by Protein Agent.")
+            esm.pretrained.esmfold_structure_module_only_8M = _dummy_esmfold_structure_module_only_8M
+
         from src.simplefold.utils import esm_utils
         
         # Store original if needed (though we mostly bypass it)
