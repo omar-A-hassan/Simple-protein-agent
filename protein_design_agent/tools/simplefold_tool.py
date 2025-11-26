@@ -9,10 +9,7 @@ from typing import Dict, Any
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Configuration: Set to True to use real SimpleFold, False for mock mode
-USE_REAL_SIMPLEFOLD = os.environ.get("USE_REAL_SIMPLEFOLD", "false").lower() == "true"
-
-# SimpleFold configuration (only used if USE_REAL_SIMPLEFOLD=True)
+# SimpleFold configuration
 SIMPLEFOLD_CONFIG = {
     "model_size": "simplefold_100M",  # Options: 100M, 360M, 700M, 1.1B, 1.6B, 3B
     "ckpt_dir": "artifacts",           # Where SimpleFold model checkpoints are stored
@@ -35,11 +32,8 @@ def _generate_embeddings_sequentially(sequence: str):
     3. Unload model and clear memory
     """
     global _PRECOMPUTED_EMBEDDINGS
-    global _PRECOMPUTED_EMBEDDINGS
-    logger.warning("DEBUG: Starting sequential embedding generation...")
-    
+
     try:
-        import torch
         import torch
         import esm
         import esm.pretrained
@@ -63,14 +57,13 @@ def _generate_embeddings_sequentially(sequence: str):
         
         for model_name in missing_models:
             if not hasattr(esm.pretrained, model_name):
-                logger.warning(f"Patching missing {model_name} in esm.pretrained")
                 # Create a dummy function that raises NotImplementedError
                 # We need to capture model_name in the closure
                 def _create_dummy(name):
                     def _dummy():
                         raise NotImplementedError(f"This is a dummy function for {name} patched by Protein Agent.")
                     return _dummy
-                
+
                 setattr(esm.pretrained, model_name, _create_dummy(model_name))
 
         # Load ESM-3B model
@@ -147,7 +140,6 @@ def _apply_sequential_patch():
         
         for model_name in missing_models:
             if not hasattr(esm.pretrained, model_name):
-                logger.warning(f"Patching missing {model_name} in esm.pretrained (Global Patch)")
                 def _create_dummy(name):
                     def _dummy():
                         raise NotImplementedError(f"This is a dummy function for {name} patched by Protein Agent.")
@@ -166,12 +158,8 @@ def _apply_sequential_patch():
             Ignores the passed model (which might be None or dummy).
             """
             global _PRECOMPUTED_EMBEDDINGS
-            logger.warning("DEBUG: Accessed patched compute_language_model_representations")
-            logger.warning(f"DEBUG: batch_tokens shape: {batch_tokens.shape if hasattr(batch_tokens, 'shape') else 'N/A'}")
 
             if _PRECOMPUTED_EMBEDDINGS is not None:
-                logger.warning(f"DEBUG: Returning pre-computed embeddings with shape: {_PRECOMPUTED_EMBEDDINGS.shape}")
-                logger.warning(f"DEBUG: Embeddings dtype: {_PRECOMPUTED_EMBEDDINGS.dtype}, device: {_PRECOMPUTED_EMBEDDINGS.device}")
                 return _PRECOMPUTED_EMBEDDINGS
             else:
                 logger.error("No pre-computed embeddings found!")
@@ -211,11 +199,7 @@ def fold_sequence(sequence: str) -> Dict[str, Any]:
     os.makedirs(output_dir, exist_ok=True)
 
     try:
-        if USE_REAL_SIMPLEFOLD:
-            return _fold_with_simplefold(sequence, job_id, output_dir)
-        else:
-            return _fold_mock(sequence, job_id, output_dir)
-
+        return _fold_with_simplefold(sequence, job_id, output_dir)
     except Exception as e:
         logger.error(f"Error during folding: {str(e)}")
         return {
@@ -226,16 +210,13 @@ def fold_sequence(sequence: str) -> Dict[str, Any]:
 
 def _fold_with_simplefold(sequence: str, job_id: str, output_dir: str) -> Dict[str, Any]:
     """
-    Real SimpleFold implementation using Apple's ml-simplefold.
+    SimpleFold implementation using Apple's ml-simplefold with sequential ESM-3B loading.
 
-    Installation:
-    1. Clone the repo: git clone https://github.com/apple/ml-simplefold.git
-    2. Install: cd ml-simplefold && pip install -e .
-    3. For Apple Silicon: pip install mlx==0.28.0
-    4. Set environment variable: export USE_REAL_SIMPLEFOLD=true
-    5. Set SIMPLEFOLD_REPO_PATH if needed
+    Uses a two-stage approach to avoid OOM on limited memory environments:
+    1. Load ESM-3B, compute embeddings, unload
+    2. Run SimpleFold with pre-computed embeddings
     """
-    logger.info("Running with REAL SimpleFold model...")
+    logger.info("Running SimpleFold with sequential loading...")
 
     # Add SimpleFold to Python path
     repo_path = SIMPLEFOLD_CONFIG["simplefold_repo_path"]
@@ -367,8 +348,7 @@ def _fold_with_simplefold(sequence: str, job_id: str, output_dir: str) -> Dict[s
                     raise e
         else:
             # Create dummy plddt_model dict with expected structure but None values
-            # SimpleFold expects multiple keys in plddt_model dict
-            logger.warning(f"DEBUG: pLDDT disabled, using dummy plddt_model dict")
+            # SimpleFold expects multiple keys in plddt_model dict when plddt is disabled
             plddt_model = {
                 "plddt_out_module": None,
                 "plddt_latent_module": None,
@@ -393,39 +373,16 @@ def _fold_with_simplefold(sequence: str, job_id: str, output_dir: str) -> Dict[s
         )
 
         # Process input and run inference
-        logger.warning("DEBUG: Processing sequence and running inference...")
+        logger.info("Processing sequence and running inference...")
         batch, structure, record = inference_wrapper.process_input(sequence)
-        logger.warning(f"DEBUG: process_input done. Batch type: {type(batch)}")
 
-        logger.warning("DEBUG: About to call run_inference...")
-        try:
-            results = inference_wrapper.run_inference(batch, folding_model, plddt_model, device=device)
-            logger.warning(f"DEBUG: run_inference completed successfully. Results type: {type(results)}")
-        except Exception as e:
-            logger.error(f"CRITICAL: run_inference raised an exception!")
-            logger.error(f"Exception type: {type(e).__name__}")
-            logger.error(f"Exception message: {str(e)}")
-            import traceback
-            logger.error(f"Full traceback:\n{traceback.format_exc()}")
-            raise
+        results = inference_wrapper.run_inference(batch, folding_model, plddt_model, device=device)
 
-        # Check what's actually in results before accessing it
         if results is None:
-            logger.error("CRITICAL: run_inference returned None!")
-            raise RuntimeError("run_inference returned None - check SimpleFold implementation")
-        else:
-            logger.warning(f"DEBUG: Results is not None. Type: {type(results)}")
-            if hasattr(results, 'keys'):
-                logger.warning(f"DEBUG: Results keys: {list(results.keys())}")
-            elif isinstance(results, (list, tuple)):
-                logger.warning(f"DEBUG: Results is a {type(results)} with length {len(results)}")
-            else:
-                logger.warning(f"DEBUG: Results is {type(results)}: {results}")
+            raise RuntimeError("SimpleFold inference returned None")
 
-        # Save results (returns list of paths)
-        logger.warning("DEBUG: About to call save_result...")
+        # Save results
         save_paths = inference_wrapper.save_result(structure, record, results, out_name=job_id)
-        logger.warning(f"DEBUG: save_result done. save_paths: {save_paths}")
         
         output_pdb_path = save_paths[0] if save_paths else None
 
@@ -445,34 +402,3 @@ def _fold_with_simplefold(sequence: str, job_id: str, output_dir: str) -> Dict[s
         # Always restore original CWD
         os.chdir(original_cwd)
         logger.info(f"Restored working directory to {original_cwd}")
-
-
-def _fold_mock(sequence: str, job_id: str, output_dir: str) -> Dict[str, Any]:
-    """
-    Mock implementation for testing without SimpleFold installed.
-    Creates a minimal valid PDB file.
-    """
-    logger.info("Running in MOCK mode. Simulating SimpleFold inference...")
-
-    output_pdb_path = os.path.join(output_dir, f"{job_id}.pdb")
-
-    # Create a dummy PDB file
-    with open(output_pdb_path, "w") as f:
-        f.write(f"REMARK   1 CREATED BY PROTEIN DESIGN AGENT (MOCK SIMPLEFOLD)\n")
-        f.write(f"REMARK   2 SEQUENCE: {sequence}\n")
-        f.write(f"REMARK   3 This is a mock PDB file for testing purposes\n")
-        f.write(f"REMARK   4 To use real SimpleFold, set USE_REAL_SIMPLEFOLD=true\n")
-        # A minimal valid PDB line for visualization tools not to crash immediately
-        f.write("ATOM      1  N   MET A   1      10.000  10.000  10.000  1.00  0.00           N\n")
-        f.write("ATOM      2  CA  MET A   1      11.000  10.000  10.000  1.00  0.00           C\n")
-        f.write("END\n")
-
-    logger.info(f"Mock PDB saved to {output_pdb_path}")
-
-    return {
-        "status": "success",
-        "pdb_file_path": os.path.abspath(output_pdb_path),
-        "message": f"Successfully folded sequence of length {len(sequence)} (MOCK MODE).",
-        "job_id": job_id,
-        "note": "This is a mock result. Set USE_REAL_SIMPLEFOLD=true to use real SimpleFold."
-    }
