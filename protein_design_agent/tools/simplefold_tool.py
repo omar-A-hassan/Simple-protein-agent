@@ -93,13 +93,15 @@ def _generate_embeddings_sequentially(sequence: str):
         if torch.cuda.is_available():
             batch_tokens = batch_tokens.cuda()
 
-        # Generate embeddings
-        logger.info("Computing embeddings...")
+        # Generate embeddings from all 37 layers (required by SimpleFold)
+        logger.info("Computing embeddings from all 37 layers...")
         with torch.no_grad():
-            results = model(batch_tokens, repr_layers=[36], return_contacts=True)
-        
-        token_representations = results["representations"][36]
-        
+            results = model(batch_tokens, repr_layers=list(range(37)), return_contacts=True)
+
+        # Stack all layers: shape will be [batch, seq_len, 37, embed_dim]
+        all_layers = [results["representations"][i] for i in range(37)]
+        token_representations = torch.stack(all_layers, dim=2)
+
         # Move to CPU and store
         _PRECOMPUTED_EMBEDDINGS = token_representations.cpu()
         logger.info(f"Embeddings computed. Shape: {_PRECOMPUTED_EMBEDDINGS.shape}")
