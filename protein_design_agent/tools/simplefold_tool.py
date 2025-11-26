@@ -367,8 +367,14 @@ def _fold_with_simplefold(sequence: str, job_id: str, output_dir: str) -> Dict[s
                     raise e
         else:
             # Create dummy plddt_model dict with expected structure but None values
+            # SimpleFold expects multiple keys in plddt_model dict
             logger.warning(f"DEBUG: pLDDT disabled, using dummy plddt_model dict")
-            plddt_model = {"plddt_out_module": None}
+            plddt_model = {
+                "plddt_out_module": None,
+                "plddt_latent_module": None,
+                "plddt_embed_module": None,
+                "plddt_linear_module": None
+            }
 
         # Initialize InferenceWrapper
         # Note: output_dir is relative to the NEW cwd (repo_path)
