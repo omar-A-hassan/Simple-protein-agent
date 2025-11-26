@@ -47,7 +47,15 @@ def _generate_embeddings_sequentially(sequence: str):
         # These functions are missing in some versions of fair-esm but required by ml-simplefold
         missing_models = [
             "esmfold_structure_module_only_8M",
-            "esmfold_structure_module_only_8M_270K"
+            "esmfold_structure_module_only_8M_270K",
+            "esmfold_structure_module_only_35M",
+            "esmfold_structure_module_only_35M_270K",
+            "esmfold_structure_module_only_150M",
+            "esmfold_structure_module_only_150M_270K",
+            "esmfold_structure_module_only_650M",
+            "esmfold_structure_module_only_650M_270K",
+            "esmfold_structure_module_only_3B",
+            "esmfold_structure_module_only_3B_270K",
         ]
         
         for model_name in missing_models:
@@ -119,7 +127,15 @@ def _apply_sequential_patch():
         import esm.pretrained
         missing_models = [
             "esmfold_structure_module_only_8M",
-            "esmfold_structure_module_only_8M_270K"
+            "esmfold_structure_module_only_8M_270K",
+            "esmfold_structure_module_only_35M",
+            "esmfold_structure_module_only_35M_270K",
+            "esmfold_structure_module_only_150M",
+            "esmfold_structure_module_only_150M_270K",
+            "esmfold_structure_module_only_650M",
+            "esmfold_structure_module_only_650M_270K",
+            "esmfold_structure_module_only_3B",
+            "esmfold_structure_module_only_3B_270K",
         ]
         
         for model_name in missing_models:
