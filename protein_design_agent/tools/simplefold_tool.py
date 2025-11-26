@@ -35,7 +35,8 @@ def _generate_embeddings_sequentially(sequence: str):
     3. Unload model and clear memory
     """
     global _PRECOMPUTED_EMBEDDINGS
-    logger.info("Starting sequential embedding generation...")
+    global _PRECOMPUTED_EMBEDDINGS
+    logger.warning("DEBUG: Starting sequential embedding generation...")
     
     try:
         import torch
@@ -163,7 +164,8 @@ def _apply_sequential_patch():
             Ignores the passed model (which might be None or dummy).
             """
             global _PRECOMPUTED_EMBEDDINGS
-            logger.info("Accessed patched compute_language_model_representations")
+            global _PRECOMPUTED_EMBEDDINGS
+            logger.warning("DEBUG: Accessed patched compute_language_model_representations")
             
             if _PRECOMPUTED_EMBEDDINGS is not None:
                 logger.info("Returning pre-computed embeddings")
@@ -379,12 +381,17 @@ def _fold_with_simplefold(sequence: str, job_id: str, output_dir: str) -> Dict[s
         )
 
         # Process input and run inference
-        logger.info("Processing sequence and running inference...")
+        logger.warning("DEBUG: Processing sequence and running inference...")
         batch, structure, record = inference_wrapper.process_input(sequence)
+        logger.warning(f"DEBUG: process_input done. Batch type: {type(batch)}")
+        
         results = inference_wrapper.run_inference(batch, folding_model, plddt_model, device=device)
+        logger.warning(f"DEBUG: run_inference done. Results: {results}")
 
         # Save results (returns list of paths)
         save_paths = inference_wrapper.save_result(structure, record, results, out_name=job_id)
+        logger.warning(f"DEBUG: save_result done. save_paths: {save_paths}")
+        
         output_pdb_path = save_paths[0] if save_paths else None
 
         if output_pdb_path is None:
