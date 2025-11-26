@@ -103,7 +103,6 @@ def _apply_sequential_patch():
     Monkey-patches esm_utils to use pre-computed embeddings.
     """
     try:
-    try:
         # PATCH: Fix for "cannot import name 'esmfold_structure_module_only_8M'"
         # We must apply this BEFORE importing esm_utils, as it might import esm.pretrained
         import esm.pretrained
