@@ -346,13 +346,14 @@ def _fold_with_simplefold(sequence: str, job_id: str, output_dir: str) -> Dict[s
         )
         
         # Load pLDDT model if requested
-        plddt_model = None
+        # NOTE: SimpleFold's run_inference expects plddt_model to be a dict, not None
+        # When plddt is disabled, we pass a dict with plddt_out_module set to None
         if SIMPLEFOLD_CONFIG["plddt"]:
             # pLDDT model has a specific name in SimpleFold wrapper, usually plddt_module_1.6B.ckpt
             # But the wrapper handles the name internally. We just need to catch the error.
             # For the file path, we might guess, but let's just try/except the call.
             # The wrapper uses a fixed URL/name for pLDDT: plddt_module_1.6B.ckpt
-            
+
             try:
                 plddt_model = model_wrapper.from_pretrained_plddt_model()
             except RuntimeError as e:
@@ -364,6 +365,10 @@ def _fold_with_simplefold(sequence: str, job_id: str, output_dir: str) -> Dict[s
                     plddt_model = model_wrapper.from_pretrained_plddt_model()
                  else:
                     raise e
+        else:
+            # Create dummy plddt_model dict with expected structure but None values
+            logger.warning(f"DEBUG: pLDDT disabled, using dummy plddt_model dict")
+            plddt_model = {"plddt_out_module": None}
 
         # Initialize InferenceWrapper
         # Note: output_dir is relative to the NEW cwd (repo_path)
