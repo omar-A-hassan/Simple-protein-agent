@@ -43,13 +43,24 @@ def _generate_embeddings_sequentially(sequence: str):
         import esm
         import esm.pretrained
 
-        # PATCH: Fix for "cannot import name 'esmfold_structure_module_only_8M'"
-        # This function is missing in some versions of fair-esm but required by ml-simplefold (or its dependencies)
-        if not hasattr(esm.pretrained, "esmfold_structure_module_only_8M"):
-            logger.warning("Patching missing esmfold_structure_module_only_8M in esm.pretrained")
-            def _dummy_esmfold_structure_module_only_8M():
-                raise NotImplementedError("This is a dummy function patched by Protein Agent.")
-            esm.pretrained.esmfold_structure_module_only_8M = _dummy_esmfold_structure_module_only_8M
+        # PATCH: Fix for missing ablation models in esm.pretrained
+        # These functions are missing in some versions of fair-esm but required by ml-simplefold
+        missing_models = [
+            "esmfold_structure_module_only_8M",
+            "esmfold_structure_module_only_8M_270K"
+        ]
+        
+        for model_name in missing_models:
+            if not hasattr(esm.pretrained, model_name):
+                logger.warning(f"Patching missing {model_name} in esm.pretrained")
+                # Create a dummy function that raises NotImplementedError
+                # We need to capture model_name in the closure
+                def _create_dummy(name):
+                    def _dummy():
+                        raise NotImplementedError(f"This is a dummy function for {name} patched by Protein Agent.")
+                    return _dummy
+                
+                setattr(esm.pretrained, model_name, _create_dummy(model_name))
 
         # Load ESM-3B model
         logger.info("Loading ESM-3B model (esm2_t36_3B_UR50D)...")
@@ -103,14 +114,22 @@ def _apply_sequential_patch():
     Monkey-patches esm_utils to use pre-computed embeddings.
     """
     try:
-        # PATCH: Fix for "cannot import name 'esmfold_structure_module_only_8M'"
-        # We must apply this BEFORE importing esm_utils, as it might import esm.pretrained
+        # PATCH: Fix for missing ablation models in esm.pretrained
+        # We must apply this BEFORE importing esm_utils
         import esm.pretrained
-        if not hasattr(esm.pretrained, "esmfold_structure_module_only_8M"):
-            logger.warning("Patching missing esmfold_structure_module_only_8M in esm.pretrained (Global Patch)")
-            def _dummy_esmfold_structure_module_only_8M():
-                raise NotImplementedError("This is a dummy function patched by Protein Agent.")
-            esm.pretrained.esmfold_structure_module_only_8M = _dummy_esmfold_structure_module_only_8M
+        missing_models = [
+            "esmfold_structure_module_only_8M",
+            "esmfold_structure_module_only_8M_270K"
+        ]
+        
+        for model_name in missing_models:
+            if not hasattr(esm.pretrained, model_name):
+                logger.warning(f"Patching missing {model_name} in esm.pretrained (Global Patch)")
+                def _create_dummy(name):
+                    def _dummy():
+                        raise NotImplementedError(f"This is a dummy function for {name} patched by Protein Agent.")
+                    return _dummy
+                setattr(esm.pretrained, model_name, _create_dummy(model_name))
 
         from src.simplefold.utils import esm_utils
         
