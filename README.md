@@ -132,7 +132,7 @@ from protein_design_agent.agent import create_protein_agent
 from google.adk.runners import InMemoryRunner
 
 # Create agent with desired Gemini model
-agent = create_protein_agent("gemini-2.5-pro")  # Most advanced
+agent = create_protein_agent("gemini-2.5-pro")  # Most advanced, you can pick any Gemini model
 # agent = create_protein_agent("gemini-2.0-flash")  # Faster, cost-effective
 
 # Run the agent
@@ -142,9 +142,9 @@ response = await runner.run_debug(
 )
 ```
 
-### In Jupyter Notebook
+### In Kaggle Notebook
 
-See `protein.ipynb` for interactive examples including:
+See [Demo](tutorials/protein.ipynb) for interactive examples including:
 - Designing antimicrobial peptides
 - Creating membrane proteins
 - Visualizing generated structures with py3Dmol
