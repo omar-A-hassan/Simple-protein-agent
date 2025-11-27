@@ -96,7 +96,7 @@ This makes state-of-the-art protein structure prediction accessible on consumer 
 
 1. **Clone and install dependencies**
    ```bash
-   git clone <your-repo>
+   git clone <this repo or your fork of it>
    cd Protein\ Agent
    pip install -r requirements.txt
    ```
